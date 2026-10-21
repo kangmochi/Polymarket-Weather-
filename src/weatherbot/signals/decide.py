@@ -28,6 +28,7 @@ def decide(
     max_order_usd: float,
     min_order_usd: float,
     cash_usd: float,
+    capital_fraction: float = 0.05,
     position_open: bool,
     order_exists_for: Callable[[str], bool],
     station_id: str,
@@ -67,7 +68,14 @@ def decide(
     if order_exists_for(side):
         return _rejected("duplicate_order", side=side, price=price, edge=edge, key=key)
 
-    notional = order_notional(probability, price, side, capital_usd, max_order_usd)
+    notional = order_notional(
+        probability,
+        price,
+        side,
+        capital_usd,
+        max_order_usd,
+        capital_fraction,
+    )
     if notional < min_order_usd:
         return _rejected("size_below_minimum", side=side, price=price, edge=edge, key=key)
     if cash_usd < notional:

@@ -25,6 +25,7 @@ FORBIDDEN_KEYS = frozenset(
 class Settings:
     capital_usd: float
     max_order_usd: float
+    capital_fraction: float
     min_order_usd: float
     min_edge: float
     max_spread: float
@@ -42,6 +43,7 @@ def load_settings(path: str) -> Settings:
     reject_forbidden_keys(raw)
     capital = _positive(raw, "capital_usd")
     max_order = _positive(raw, "max_order_usd")
+    capital_fraction = _capital_fraction(raw)
     min_order = _non_negative(raw, "min_order_usd")
     min_edge = _non_negative(raw, "min_edge")
     max_spread = _positive(raw, "max_spread")
@@ -65,6 +67,7 @@ def load_settings(path: str) -> Settings:
     return Settings(
         capital_usd=capital,
         max_order_usd=max_order,
+        capital_fraction=capital_fraction,
         min_order_usd=min_order,
         min_edge=min_edge,
         max_spread=max_spread,
@@ -99,6 +102,15 @@ def _reject_forbidden(value: object) -> None:
     elif isinstance(value, list):
         for child in value:
             _reject_forbidden(child)
+
+
+def _capital_fraction(raw: dict[str, Any]) -> float:
+    if "capital_fraction" not in raw or raw.get("capital_fraction") is None:
+        return 0.05
+    value = _number(raw, "capital_fraction")
+    if not 0 < value <= 1:
+        raise ValueError("capital_fraction must be in (0, 1]")
+    return value
 
 
 def _number(raw: dict[str, Any], key: str) -> float:

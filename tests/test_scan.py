@@ -106,6 +106,7 @@ def _settings(database: str) -> Settings:
     return Settings(
         capital_usd=1000,
         max_order_usd=25,
+        capital_fraction=0.05,
         min_order_usd=1,
         min_edge=0.05,
         max_spread=0.10,
@@ -229,6 +230,7 @@ def test_shipped_registry_and_paper_config_load():
     settings = load_settings(str(ROOT / "config" / "paper.yaml"))
     assert settings.capital_usd == 1000
     assert settings.max_order_usd == 25
+    assert settings.capital_fraction == 0.05
     assert settings.ensemble_model == "ncep_gefs025"
 
 
@@ -375,4 +377,76 @@ def test_live_scan_signs_and_posts_without_moving_paper_cash(tmp_path: Path) -> 
     assert db.position_rows() == []
     assert "live orders" in summary
     assert "filled sent: 1" in summary
+    db.close()
+
+
+def test_live_entry_uses_the_yaml_bankroll_and_not_a_larger_paper_balance(tmp_path: Path) -> None:
+    wallet = tmp_path / "wallet.env"
+    _wallet_file(wallet, key="test-signer", funder="0x0000000000000000000000000000000000000001")
+    db = Database(str(tmp_path / "paper.sqlite"))
+    db.ensure_account(1000, "2026-10-20T16:00:00Z")
+    http = FakeHttp(_books())
+    book = _LiveBook()
+    settings = replace(_settings(db.path), capital_usd=200, max_order_usd=25, capital_fraction=0.05)
+    run_scan(
+        http,
+        db,
+        [_station()],
+        settings,
+        NOW,
+        trading_mode="live",
+        wallet_env=str(wallet),
+        open_live_client=lambda _wallet: book,
+    )
+    assert book.orders == [
+        {"token_id": "token-fill", "price": pytest.approx(0.4), "size": pytest.approx(25), "side": "BUY"}
+    ]
+    assert db.cash_usd() == pytest.approx(1000)
+    db.close()
+
+
+def test_live_does_not_spend_more_than_cash_left_under_the_cap(tmp_path: Path) -> None:
+    wallet = tmp_path / "wallet.env"
+    _wallet_file(wallet, key="test-signer", funder="0x0000000000000000000000000000000000000001")
+    db = Database(str(tmp_path / "paper.sqlite"))
+    db.ensure_account(1000, "2026-10-20T16:00:00Z")
+    cursor = db.conn.execute(
+        """
+        INSERT INTO signals (
+          station_id, city, settlement_station_id, valid_date, model_probability,
+          decision, reason, created_at
+        ) VALUES ('nyc', 'New York', 'KLGA', '2026-10-19', 1, 'accepted', 'accepted', '2026-10-20T16:00:00Z')
+        """
+    )
+    db.conn.commit()
+    db.record_live_order(
+        signal_id=int(cursor.lastrowid),
+        idempotency_key="already-sent",
+        bucket_key="old-token",
+        station_id="nyc",
+        valid_date="2026-10-19",
+        side="buy",
+        limit_price=0.4,
+        notional_usd=195,
+        contracts=10,
+        status="filled",
+        reason="sent",
+        created_at="2026-10-20T16:00:00Z",
+    )
+    http = FakeHttp(_books())
+    book = _LiveBook()
+    settings = replace(_settings(db.path), capital_usd=200, max_order_usd=25, capital_fraction=0.05)
+    run_scan(
+        http,
+        db,
+        [_station()],
+        settings,
+        NOW,
+        trading_mode="live",
+        wallet_env=str(wallet),
+        open_live_client=lambda _wallet: book,
+    )
+    assert book.orders == []
+    assert db.live_reserved_usd() == pytest.approx(195)
+    assert db.cash_usd() == pytest.approx(1000)
     db.close()

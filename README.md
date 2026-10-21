@@ -11,7 +11,7 @@ The default mode is paper. `python -m weatherbot paper` ignores the wallet and k
 3. A bucket probability is the average of each member's mass inside the bucket bounds. Sigma = `sigma_floor_c + sigma_per_sqrt_day_c * sqrt(lead_days)`, converted into the market unit. Those coefficients are configuration, not a fitted model.
 4. `or higher` / `or below` buckets have explicit far bounds (`tail_lower_bound_c`, `tail_upper_bound_c`). Mass outside those bounds is not given to the open bucket. Whole degrees from the resolution source map to a half-degree window, so `56-57°F` becomes `[55.5, 57.5)`.
 5. The CLOB book is read separately. A buy uses the best ask. A sell uses the best bid. Depth is the size at that price. Last price is not read. A book missing one side, or a spread above `max_spread`, rejects the signal before edge is computed, so the edge column stays empty.
-6. Buy edge is probability minus ask. Sell edge is bid minus probability. Size is the minimum of quarter-Kelly, `max_order_usd`, and 5% of starting capital. One position per bucket. A sell locks capital equal to the notional, contracts times `(1 - bid)`.
+6. Buy edge is probability minus ask. Sell edge is bid minus probability. Size is the minimum of quarter-Kelly, `max_order_usd`, and `capital_fraction` times `capital_usd`. One position per bucket. A sell locks capital equal to the notional, contracts times `(1 - bid)`.
 7. Paper execution is separate from research. The idempotency key is a hash of station, date, token, and side, so a repeat scan does not add another order. Short depth is stored as an `unfilled` order and does not change cash. A `filled` order does. Live mode uses the same decision, then signs that order and sends it. It does not change paper cash.
 8. SQLite stores every signal, including rejects: fetch time, station, probability, bid, ask, and reason. A position whose market has resolved moves to `paper_settlements` with a win or loss, payout, and pnl. Paper cash increases by the payout. `portfolio` reports cash, equity, and open pnl. The `city_bias` table exists and starts empty.
 
@@ -39,7 +39,9 @@ Later updates from this clone:
 git pull
 ```
 
-`capital_usd` in `config/paper.yaml` is the paper starting capital and should match the live capital you plan to use. `max_order_usd` is the dollar cap per order.
+`capital_usd` in `config/paper.yaml` is the bankroll in paper mode and in live mode. `max_order_usd` is the most one entry may lock. `capital_fraction` defaults to 0.05 and is the fraction of `capital_usd` allowed on one entry. The order notional is the minimum of quarter-Kelly, `max_order_usd`, and `capital_fraction` times `capital_usd`. A `capital_fraction` outside (0, 1] is rejected.
+
+A user with $200 sets `capital_usd` to 200. With `capital_fraction` 0.05, one entry locks at most $10, and `max_order_usd` can set a lower dollar cap. The same two numbers apply in paper mode and in live mode. Live mode does not spend more than the cash still available under that cap.
 
 The default database is `data/weatherbot.sqlite`. That file is not committed.
 

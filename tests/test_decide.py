@@ -65,6 +65,13 @@ def test_buy_uses_the_ask_and_size_is_the_smallest_of_three_caps():
     assert decision.contracts == pytest.approx(25 / 0.40)
 
 
+def test_capital_fraction_caps_one_entry_and_max_order_can_go_lower():
+    fraction_cap = order_notional(1.0, 0.40, "buy", 200, 25, capital_fraction=0.05)
+    dollar_cap = order_notional(1.0, 0.40, "buy", 200, 8, capital_fraction=0.05)
+    assert fraction_cap == pytest.approx(10)
+    assert dollar_cap == pytest.approx(8)
+
+
 def test_quarter_kelly_binds_when_it_is_smaller_than_the_dollar_and_capital_caps():
     notional = order_notional(0.42, 0.40, "buy", 1000, 25)
     full = (0.42 - 0.40) / (1 - 0.40)

@@ -8,12 +8,13 @@ def order_notional(
     side: str,
     capital_usd: float,
     max_order_usd: float,
+    capital_fraction: float = CAPITAL_FRACTION,
 ) -> float:
-    """Smaller of quarter-Kelly, the dollar cap, and 5% of starting capital."""
-    if capital_usd <= 0 or max_order_usd <= 0:
+    """Smaller of quarter-Kelly, the dollar cap, and capital_fraction of the bankroll."""
+    if capital_usd <= 0 or max_order_usd <= 0 or capital_fraction <= 0:
         return 0.0
     kelly = _quarter_kelly_notional(probability, price, side, capital_usd)
-    return min(kelly, max_order_usd, CAPITAL_FRACTION * capital_usd)
+    return min(kelly, max_order_usd, capital_fraction * capital_usd)
 
 
 def contracts_for(side: str, notional_usd: float, price: float) -> float:

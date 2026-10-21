@@ -1,8 +1,9 @@
-# Paper capital matches the live capital you plan to use.
-# Order size uses min(quarter Kelly, max_order_usd, 5% of capital).
+# capital_usd is the bankroll in paper and live.
+# One entry locks min(quarter Kelly, max_order_usd, capital_fraction * capital_usd).
 # Do not put a private key, an API secret, a passphrase, or a Telegram token in this file.
 capital_usd: 1000
 max_order_usd: 25
+capital_fraction: 0.05
 min_order_usd: 1
 min_edge: 0.05
 max_spread: 0.10

@@ -230,7 +230,7 @@ def _scan_station(
             continue
         valid_date = item.valid_date.isoformat()
         if mode == "live":
-            available_cash = max(0.0, db.cash_usd() - db.live_reserved_usd())
+            available_cash = max(0.0, settings.capital_usd - db.live_reserved_usd())
             position_open = db.live_position_open(item.token_id)
             order_exists = db.live_order_exists
         else:
@@ -242,8 +242,9 @@ def _scan_station(
             book=book,
             max_spread=settings.max_spread,
             min_edge=settings.min_edge,
-            capital_usd=db.starting_capital_usd(),
+            capital_usd=settings.capital_usd,
             max_order_usd=settings.max_order_usd,
+            capital_fraction=settings.capital_fraction,
             min_order_usd=settings.min_order_usd,
             cash_usd=available_cash,
             position_open=position_open,
