@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the Polymarket weather paper scan every 30 minutes
+
+[Timer]
+# Wall-clock schedule so the next run stays visible after each scan.
+OnCalendar=*:0/30
+AccuracySec=1min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

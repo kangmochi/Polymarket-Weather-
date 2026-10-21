@@ -1,0 +1,156 @@
+# Coordinates are the settlement station, not the city center.
+# title_city must match the phrase in the Polymarket event title.
+# slug_city is the slug piece: highest-temperature-in-{slug_city}-on-{month}-{day}-{year}
+stations:
+  - id: nyc
+    city: New York
+    title_city: NYC
+    slug_city: nyc
+    timezone: America/New_York
+    latitude: 40.7794
+    longitude: -73.8803
+    settlement_station_id: KLGA
+  - id: chicago
+    city: Chicago
+    title_city: Chicago
+    slug_city: chicago
+    timezone: America/Chicago
+    latitude: 41.9602
+    longitude: -87.9316
+    settlement_station_id: KORD
+  - id: miami
+    city: Miami
+    title_city: Miami
+    slug_city: miami
+    timezone: America/New_York
+    latitude: 25.7881
+    longitude: -80.3169
+    settlement_station_id: KMIA
+  - id: atlanta
+    city: Atlanta
+    title_city: Atlanta
+    slug_city: atlanta
+    timezone: America/New_York
+    latitude: 33.6297
+    longitude: -84.4422
+    settlement_station_id: KATL
+  - id: dallas
+    city: Dallas
+    title_city: Dallas
+    slug_city: dallas
+    timezone: America/Chicago
+    latitude: 32.8384
+    longitude: -96.8358
+    settlement_station_id: KDAL
+  - id: denver
+    city: Denver
+    title_city: Denver
+    slug_city: denver
+    timezone: America/Denver
+    latitude: 39.713
+    longitude: -104.758
+    settlement_station_id: KBKF
+  - id: austin
+    city: Austin
+    title_city: Austin
+    slug_city: austin
+    timezone: America/Chicago
+    latitude: 30.1831
+    longitude: -97.6806
+    settlement_station_id: KAUS
+  - id: los-angeles
+    city: Los Angeles
+    title_city: Los Angeles
+    slug_city: los-angeles
+    timezone: America/Los_Angeles
+    latitude: 33.9382
+    longitude: -118.3866
+    settlement_station_id: KLAX
+  - id: san-francisco
+    city: San Francisco
+    title_city: San Francisco
+    slug_city: san-francisco
+    timezone: America/Los_Angeles
+    latitude: 37.6196
+    longitude: -122.3656
+    settlement_station_id: KSFO
+  - id: seattle
+    city: Seattle
+    title_city: Seattle
+    slug_city: seattle
+    timezone: America/Los_Angeles
+    latitude: 47.4447
+    longitude: -122.3144
+    settlement_station_id: KSEA
+  - id: london
+    city: London
+    title_city: London
+    slug_city: london
+    timezone: Europe/London
+    latitude: 51.505
+    longitude: 0.055
+    settlement_station_id: EGLC
+  - id: paris
+    city: Paris
+    title_city: Paris
+    slug_city: paris
+    timezone: Europe/Paris
+    latitude: 48.967
+    longitude: 2.428
+    settlement_station_id: LFPB
+  - id: toronto
+    city: Toronto
+    title_city: Toronto
+    slug_city: toronto
+    timezone: America/Toronto
+    latitude: 43.679
+    longitude: -79.629
+    settlement_station_id: CYYZ
+  - id: shanghai
+    city: Shanghai
+    title_city: Shanghai
+    slug_city: shanghai
+    timezone: Asia/Shanghai
+    latitude: 31.146
+    longitude: 121.8
+    settlement_station_id: ZSPD
+  - id: tokyo
+    city: Tokyo
+    title_city: Tokyo
+    slug_city: tokyo
+    timezone: Asia/Tokyo
+    latitude: 35.553
+    longitude: 139.781
+    settlement_station_id: RJTT
+  - id: seoul
+    city: Seoul
+    title_city: Seoul (Incheon)
+    slug_city: seoul
+    timezone: Asia/Seoul
+    latitude: 37.469
+    longitude: 126.451
+    settlement_station_id: RKSI
+  - id: singapore
+    city: Singapore
+    title_city: Singapore
+    slug_city: singapore
+    timezone: Asia/Singapore
+    latitude: 1.368
+    longitude: 103.982
+    settlement_station_id: WSSS
+  - id: hong-kong
+    city: Hong Kong
+    title_city: Hong Kong
+    slug_city: hong-kong
+    timezone: Asia/Hong_Kong
+    latitude: 22.309
+    longitude: 113.922
+    settlement_station_id: VHHH
+  - id: istanbul
+    city: Istanbul
+    title_city: Istanbul
+    slug_city: istanbul
+    timezone: Europe/Istanbul
+    latitude: 41.262
+    longitude: 28.74
+    settlement_station_id: LTFM

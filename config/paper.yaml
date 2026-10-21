@@ -1,0 +1,17 @@
+# Paper capital matches the live capital you plan to use.
+# Order size uses min(quarter Kelly, max_order_usd, 5% of capital).
+# Do not put a private key, an API secret, or a Telegram token in this file.
+capital_usd: 1000
+max_order_usd: 25
+min_order_usd: 1
+min_edge: 0.05
+max_spread: 0.10
+forecast_days: 3
+# Far bounds for "or higher" / "or lower" buckets. Not infinity.
+tail_lower_bound_c: -80
+tail_upper_bound_c: 60
+# Structural sigma, not a fitted model.
+sigma_floor_c: 0.4
+sigma_per_sqrt_day_c: 0.8
+ensemble_model: ncep_gefs025
+database: data/weatherbot.sqlite
