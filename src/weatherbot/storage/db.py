@@ -125,6 +125,22 @@ CREATE TABLE IF NOT EXISTS paper_settlements (
   settled_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS live_orders (
+  id INTEGER PRIMARY KEY,
+  signal_id INTEGER NOT NULL REFERENCES signals(id),
+  idempotency_key TEXT NOT NULL UNIQUE,
+  bucket_key TEXT NOT NULL,
+  station_id TEXT NOT NULL,
+  valid_date TEXT NOT NULL,
+  side TEXT NOT NULL,
+  limit_price REAL NOT NULL,
+  notional_usd REAL NOT NULL,
+  contracts REAL,
+  status TEXT NOT NULL CHECK (status IN ('filled', 'unfilled')),
+  reason TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS city_bias (
   city TEXT PRIMARY KEY,
   bias_degrees REAL,
@@ -189,6 +205,88 @@ class Database:
             (idempotency_key,),
         ).fetchone()
         return row is not None
+
+    def live_order_exists(self, idempotency_key: str) -> bool:
+        row = self.conn.execute(
+            "SELECT 1 FROM live_orders WHERE idempotency_key = ?",
+            (idempotency_key,),
+        ).fetchone()
+        return row is not None
+
+    def live_position_open(self, bucket_key: str) -> bool:
+        row = self.conn.execute(
+            "SELECT 1 FROM live_orders WHERE bucket_key = ? AND status = 'filled'",
+            (bucket_key,),
+        ).fetchone()
+        return row is not None
+
+    def live_reserved_usd(self) -> float:
+        row = self.conn.execute(
+            "SELECT COALESCE(SUM(notional_usd), 0) AS n FROM live_orders WHERE status = 'filled'"
+        ).fetchone()
+        return float(row["n"])
+
+    def record_live_order(
+        self,
+        *,
+        signal_id: int,
+        idempotency_key: str,
+        bucket_key: str,
+        station_id: str,
+        valid_date: str,
+        side: str,
+        limit_price: float,
+        notional_usd: float,
+        contracts: float,
+        status: str,
+        reason: str,
+        created_at: str,
+    ) -> None:
+        """Store a live result without moving paper cash."""
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            existing = self.conn.execute(
+                "SELECT 1 FROM live_orders WHERE idempotency_key = ?",
+                (idempotency_key,),
+            ).fetchone()
+            if existing is not None:
+                self.conn.rollback()
+                raise LookupError("duplicate_order")
+            self.conn.execute(
+                """
+                INSERT INTO live_orders (
+                  signal_id, idempotency_key, bucket_key, station_id, valid_date,
+                  side, limit_price, notional_usd, contracts, status, reason, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    signal_id,
+                    idempotency_key,
+                    bucket_key,
+                    station_id,
+                    valid_date,
+                    side,
+                    limit_price,
+                    notional_usd,
+                    contracts,
+                    status,
+                    reason,
+                    created_at,
+                ),
+            )
+            self.conn.execute(
+                """
+                UPDATE signals
+                SET execution_status = ?, execution_reason = ?
+                WHERE id = ?
+                """,
+                (status, reason, signal_id),
+            )
+            self.conn.commit()
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.rollback()
+            raise
 
     def bias_count(self) -> int:
         row = self.conn.execute("SELECT COUNT(*) AS n FROM city_bias").fetchone()
@@ -620,6 +718,18 @@ class Database:
             lines.append("  none")
         for row in orders:
             lines.append(f"  {row['status']} {row['reason']}: {row['n']}")
+        live_orders = self.conn.execute(
+            """
+            SELECT status, reason, COUNT(*) AS n
+            FROM live_orders
+            GROUP BY status, reason
+            ORDER BY status, reason
+            """
+        ).fetchall()
+        if live_orders:
+            lines.append("live orders")
+            for row in live_orders:
+                lines.append(f"  {row['status']} {row['reason']}: {row['n']}")
         return "\n".join(lines)
 
     def _account(self) -> sqlite3.Row:

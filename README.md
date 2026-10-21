@@ -1,8 +1,8 @@
-# Polymarket weather bot, paper mode
+# Polymarket weather bot
 
 This bot trades only daily temperature markets. The decision path is arithmetic: the fraction of ensemble members, a sigma that widens with lead time, then the book price. There is no LLM and no machine-learning model.
 
-The default mode is paper. Wallet and Telegram settings stay in local env files. This bot does not place live orders. Telegram sends one digest of filled and unfilled orders, then a second digest only when a position settles as a win or loss.
+The default mode is paper. `python -m weatherbot paper` ignores the wallet and keeps the paper scan. `python -m weatherbot live` requires `POLYMARKET_PRIVATE_KEY` and `POLYMARKET_FUNDER_ADDRESS`, signs the order with that wallet, and sends it to the CLOB host. A missing key in live mode stops the scan before any order is sent. Telegram sends one digest of filled and unfilled orders, then a second digest only when a position settles as a win or loss.
 
 ## Flow
 
@@ -12,7 +12,7 @@ The default mode is paper. Wallet and Telegram settings stay in local env files.
 4. `or higher` / `or below` buckets have explicit far bounds (`tail_lower_bound_c`, `tail_upper_bound_c`). Mass outside those bounds is not given to the open bucket. Whole degrees from the resolution source map to a half-degree window, so `56-57°F` becomes `[55.5, 57.5)`.
 5. The CLOB book is read separately. A buy uses the best ask. A sell uses the best bid. Depth is the size at that price. Last price is not read. A book missing one side, or a spread above `max_spread`, rejects the signal before edge is computed, so the edge column stays empty.
 6. Buy edge is probability minus ask. Sell edge is bid minus probability. Size is the minimum of quarter-Kelly, `max_order_usd`, and 5% of starting capital. One position per bucket. A sell locks capital equal to the notional, contracts times `(1 - bid)`.
-7. Paper execution is separate from research. The idempotency key is a hash of station, date, token, and side, so a repeat scan does not add another order. Short depth is stored as an `unfilled` order and does not change cash. A `filled` order does.
+7. Paper execution is separate from research. The idempotency key is a hash of station, date, token, and side, so a repeat scan does not add another order. Short depth is stored as an `unfilled` order and does not change cash. A `filled` order does. Live mode uses the same decision, then signs that order and sends it. It does not change paper cash.
 8. SQLite stores every signal, including rejects: fetch time, station, probability, bid, ask, and reason. A position whose market has resolved moves to `paper_settlements` with a win or loss, payout, and pnl. Paper cash increases by the payout. `portfolio` reports cash, equity, and open pnl. The `city_bias` table exists and starts empty.
 
 ## Run
@@ -25,10 +25,13 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
 python -m weatherbot collect
-python -m weatherbot scan
+python -m weatherbot paper
+python -m weatherbot live
 python -m weatherbot status
 python -m weatherbot portfolio
 ```
+
+`paper` ignores the wallet, even when `TRADING_MODE=live` is set in the local file. `live` signs with the wallet and sends the order to `POLYMARKET_CLOB_HOST`. `scan` follows `TRADING_MODE` and defaults to paper. The timer runs `scan`.
 
 Later updates from this clone:
 
@@ -42,7 +45,7 @@ The default database is `data/weatherbot.sqlite`. That file is not committed.
 
 ## Local settings
 
-Copy each example and fill it in on your own machine. Do not commit `config/wallet.env` or `config/telegram.env`. Do not paste a key or token into chat. `config/paper.yaml` still rejects a private key, an API secret, a passphrase, or a Telegram token. Paper mode stays the default. There is no live-order command.
+Copy each example and fill it in on your own machine. Do not commit `config/wallet.env` or `config/telegram.env`. Do not paste a key or token into chat. `config/paper.yaml` still rejects a private key, an API secret, a passphrase, or a Telegram token. Paper mode stays the default.
 
 ### Wallet
 
@@ -50,9 +53,9 @@ Copy each example and fill it in on your own machine. Do not commit `config/wall
 cp config/wallet.env.example config/wallet.env
 ```
 
-`POLYMARKET_PRIVATE_KEY` is the signer key exported from your own Polymarket wallet. `POLYMARKET_FUNDER_ADDRESS` is the address that holds the funds. `POLYMARKET_SIGNATURE_TYPE` is 0 for an externally owned account, 1 for a Polymarket proxy, and 2 for a Gnosis Safe. The example leaves the key and the funder address empty. It sets the signature type to 2, the chain id to 137, and the CLOB host to `https://clob.polymarket.com`.
+`TRADING_MODE` accepts `paper` or `live`. The example sets `paper`. `paper` ignores the wallet and keeps the current paper scan. `live` requires `POLYMARKET_PRIVATE_KEY` and `POLYMARKET_FUNDER_ADDRESS`. It signs the order with that wallet and sends it to `POLYMARKET_CLOB_HOST`. If either value is missing, the scan stops before any order is sent.
 
-Filling in this file does not place an order.
+`POLYMARKET_PRIVATE_KEY` is the signer key exported from your own Polymarket wallet. `POLYMARKET_FUNDER_ADDRESS` is the address that holds the funds. `POLYMARKET_SIGNATURE_TYPE` is 0 for an externally owned account, 1 for a Polymarket proxy, and 2 for a Gnosis Safe. The example leaves the key and the funder address empty. It sets the signature type to 2, the chain id to 137, and the CLOB host to `https://clob.polymarket.com`.
 
 ### Telegram
 
@@ -79,5 +82,4 @@ journalctl -u polymarket-weather-bot.service -n 50
 
 ## Left out on purpose
 
-- Live orders and signatures. There is no live-order command.
 - City-bias updates. That waits on settlement, and the model does not read the bias table yet.

@@ -35,8 +35,10 @@ def test_published_tree_leaves_out_secrets_and_the_private_home():
     assert not list(ROOT.rglob("*.sqlite"))
     assert not list(ROOT.rglob("*.sqlite3"))
     cli = (ROOT / "src" / "weatherbot" / "cli.py").read_text(encoding="utf-8")
-    assert '("scan", "collect", "status", "portfolio")' in cli
-    assert "live" not in cli.lower()
+    assert '"paper"' in cli and '"live"' in cli
+    service = (DEPLOY / "polymarket-weather-bot.service").read_text(encoding="utf-8")
+    assert "ExecStart=@INSTALL_DIR@/.venv/bin/weatherbot scan" in service
+    assert "--live" not in service
     for path in ROOT.rglob("*"):
         if not path.is_file():
             continue

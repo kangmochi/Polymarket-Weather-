@@ -3,6 +3,7 @@ from typing import Any
 
 from weatherbot.errors import WeatherbotError
 from weatherbot.execution.keys import idempotency_key
+from weatherbot.execution.live import build_live_client, execute_live
 from weatherbot.execution.paper import execute_paper, touch_depth
 from weatherbot.markets.book import Book, fetch_books
 from weatherbot.notify.telegram import TelegramNotifier, load_notifier
@@ -19,6 +20,7 @@ from weatherbot.settlement import settle_expired
 from weatherbot.stations import Station
 from weatherbot.storage.db import Database
 from weatherbot.timeutil import forecast_dates, isoformat_z, lead_hours, local_today
+from weatherbot.wallet import LiveConfigError, require_live_wallet
 from weatherbot.weather.ensemble import fetch_ensemble
 from weatherbot.weather.metar import fetch_metar_today
 
@@ -72,7 +74,25 @@ def run_scan(
     settings: Settings,
     now: datetime,
     telegram_env: str | None = None,
+    trading_mode: str = "paper",
+    wallet_env: str | None = None,
+    open_live_client: Any | None = None,
 ) -> str:
+    mode = trading_mode.strip().lower()
+    if mode not in {"paper", "live"}:
+        raise ValueError("TRADING_MODE must be paper or live")
+    live_client = None
+    if mode == "live":
+        wallet = require_live_wallet(wallet_env or "config/wallet.env")
+        opener = open_live_client or build_live_client
+        try:
+            live_client = opener(wallet)
+        except LiveConfigError:
+            raise
+        except Exception as exc:
+            raise LiveConfigError(
+                "live mode could not sign in to the CLOB host; no order was sent"
+            ) from exc
     db.ensure_account(settings.capital_usd, isoformat_z(now))
     notifier = load_notifier(telegram_env or "config/telegram.env", http)
     try:
@@ -90,6 +110,8 @@ def run_scan(
                 now,
                 notifier,
                 gamma_failures,
+                mode,
+                live_client,
             )
             if gamma_failures >= _GAMMA_STOP_AFTER and index + 1 < len(stations):
                 _progress(
@@ -111,6 +133,8 @@ def _scan_station(
     now: datetime,
     notifier: TelegramNotifier | None,
     gamma_failures: int,
+    mode: str,
+    live_client: Any | None,
 ) -> int:
     created_at = isoformat_z(now)
     dates = forecast_dates(now, station.timezone, settings.forecast_days)
@@ -205,6 +229,14 @@ def _scan_station(
             )
             continue
         valid_date = item.valid_date.isoformat()
+        if mode == "live":
+            available_cash = max(0.0, db.cash_usd() - db.live_reserved_usd())
+            position_open = db.live_position_open(item.token_id)
+            order_exists = db.live_order_exists
+        else:
+            available_cash = db.cash_usd()
+            position_open = db.position_open(item.token_id)
+            order_exists = db.order_exists
         decision = decide(
             probability=probability,
             book=book,
@@ -213,10 +245,10 @@ def _scan_station(
             capital_usd=db.starting_capital_usd(),
             max_order_usd=settings.max_order_usd,
             min_order_usd=settings.min_order_usd,
-            cash_usd=db.cash_usd(),
-            position_open=db.position_open(item.token_id),
+            cash_usd=available_cash,
+            position_open=position_open,
             order_exists_for=lambda side, station_id=station.id, valid_date=valid_date, token_id=item.token_id: (
-                db.order_exists(idempotency_key(station_id, valid_date, token_id, side))
+                order_exists(idempotency_key(station_id, valid_date, token_id, side))
             ),
             station_id=station.id,
             valid_date=valid_date,
@@ -234,19 +266,34 @@ def _scan_station(
         )
         if decision.decision != "accepted" or decision.side is None:
             continue
-        result = execute_paper(
-            db,
-            signal_id,
-            decision,
-            bucket_key=item.token_id,
-            station_id=station.id,
-            city=station.city,
-            valid_date=valid_date,
-            token_id=item.token_id,
-            bucket_label=bucket.label,
-            depth=touch_depth(decision.side, book.bid_depth, book.ask_depth),
-            created_at=created_at,
-        )
+        depth = touch_depth(decision.side, book.bid_depth, book.ask_depth)
+        if mode == "live":
+            result = execute_live(
+                db,
+                signal_id,
+                decision,
+                live_client,
+                bucket_key=item.token_id,
+                station_id=station.id,
+                valid_date=valid_date,
+                token_id=item.token_id,
+                depth=depth,
+                created_at=created_at,
+            )
+        else:
+            result = execute_paper(
+                db,
+                signal_id,
+                decision,
+                bucket_key=item.token_id,
+                station_id=station.id,
+                city=station.city,
+                valid_date=valid_date,
+                token_id=item.token_id,
+                bucket_label=bucket.label,
+                depth=depth,
+                created_at=created_at,
+            )
         if (
             notifier is not None
             and decision.reference_price is not None

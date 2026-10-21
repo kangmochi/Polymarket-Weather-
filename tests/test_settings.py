@@ -44,6 +44,7 @@ def test_env_examples_have_empty_secrets_and_are_ignored():
     wallet = Path("config/wallet.env.example").read_text(encoding="utf-8")
     assert telegram == "TELEGRAM_BOT_TOKEN=\nTELEGRAM_CHAT_ID=\n"
     assert wallet == (
+        "TRADING_MODE=paper\n"
         "POLYMARKET_PRIVATE_KEY=\n"
         "POLYMARKET_FUNDER_ADDRESS=\n"
         "POLYMARKET_SIGNATURE_TYPE=2\n"

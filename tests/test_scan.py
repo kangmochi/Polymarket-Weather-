@@ -6,6 +6,7 @@ import pytest
 
 from weatherbot.errors import WeatherbotError
 from weatherbot.scan import run_scan
+from weatherbot.wallet import LiveConfigError
 from weatherbot.settings import Settings, load_settings
 from weatherbot.stations import Station, load_stations
 from weatherbot.storage.db import Database
@@ -234,11 +235,144 @@ def test_shipped_registry_and_paper_config_load():
 def test_decision_sources_do_not_call_a_model_or_hold_a_key():
     banned = ("sklearn", "openai", "torch", "private_key", "last_trade_price")
     decision_dirs = {"model", "signals", "risk", "execution", "markets", "weather"}
+    key_holders = {"wallet.py", "live.py"}
     for path in (ROOT / "src" / "weatherbot").rglob("*.py"):
         if path.name == "settings.py":
             continue
         text = path.read_text(encoding="utf-8").lower()
         for word in banned:
+            if word == "private_key" and path.name in key_holders:
+                continue
             assert word not in text, f"{path.name} contains {word}"
         if path.parent.name in decision_dirs and "telegram" in text:
             raise AssertionError(f"{path} mentions telegram")
+
+
+class _LiveBook:
+    def __init__(self) -> None:
+        self.orders: list[dict] = []
+        self.posted: list[object] = []
+
+    def create_order(self, order: dict) -> dict:
+        self.orders.append(order)
+        return {"signed": True, "order": order}
+
+    def post_order(self, signed: dict) -> dict:
+        self.posted.append(signed)
+        return {"success": True}
+
+
+def _wallet_file(path: Path, *, key: str, funder: str, mode: str = "live", host: str = "https://clob.example.test") -> None:
+    path.write_text(
+        "\n".join(
+            (
+                f"TRADING_MODE={mode}",
+                f"POLYMARKET_PRIVATE_KEY={key}",
+                f"POLYMARKET_FUNDER_ADDRESS={funder}",
+                "POLYMARKET_SIGNATURE_TYPE=2",
+                "POLYMARKET_CHAIN_ID=137",
+                f"POLYMARKET_CLOB_HOST={host}",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_paper_scan_ignores_the_wallet(tmp_path: Path) -> None:
+    wallet = tmp_path / "wallet.env"
+    _wallet_file(wallet, key="test-signer", funder="0x0000000000000000000000000000000000000001", mode="live")
+    db = Database(str(tmp_path / "paper.sqlite"))
+    http = FakeHttp(_books())
+
+    def opener(_wallet: object) -> object:
+        raise AssertionError("paper mode opened the wallet")
+
+    run_scan(
+        http,
+        db,
+        [_station()],
+        _settings(db.path),
+        NOW,
+        trading_mode="paper",
+        wallet_env=str(wallet),
+        open_live_client=opener,
+    )
+    assert db.cash_usd() == pytest.approx(975)
+    assert len(db.order_rows()) == 2
+    assert db.conn.execute("SELECT COUNT(*) AS n FROM live_orders").fetchone()["n"] == 0
+    db.close()
+
+
+def test_missing_live_key_stops_before_any_order(tmp_path: Path) -> None:
+    wallet = tmp_path / "wallet.env"
+    _wallet_file(wallet, key="", funder="")
+    db = Database(str(tmp_path / "paper.sqlite"))
+    http = FakeHttp(_books())
+
+    def opener(_wallet: object) -> object:
+        raise AssertionError("live client opened without a key")
+
+    with pytest.raises(LiveConfigError, match="no order was sent"):
+        run_scan(
+            http,
+            db,
+            [_station()],
+            _settings(db.path),
+            NOW,
+            trading_mode="live",
+            wallet_env=str(wallet),
+            open_live_client=opener,
+        )
+    assert http.gets == []
+    assert http.posts == []
+    db.close()
+
+
+def test_live_scan_signs_and_posts_without_moving_paper_cash(tmp_path: Path) -> None:
+    wallet = tmp_path / "wallet.env"
+    _wallet_file(wallet, key="test-signer", funder="0x0000000000000000000000000000000000000001")
+    db = Database(str(tmp_path / "paper.sqlite"))
+    http = FakeHttp(_books())
+    book = _LiveBook()
+    opened: dict[str, object] = {}
+
+    def opener(loaded: object) -> _LiveBook:
+        opened["wallet"] = loaded
+        return book
+
+    summary = run_scan(
+        http,
+        db,
+        [_station()],
+        _settings(db.path),
+        NOW,
+        trading_mode="live",
+        wallet_env=str(wallet),
+        open_live_client=opener,
+    )
+    run_scan(
+        http,
+        db,
+        [_station()],
+        _settings(db.path),
+        NOW,
+        trading_mode="live",
+        wallet_env=str(wallet),
+        open_live_client=opener,
+    )
+    loaded = opened["wallet"]
+    assert loaded.clob_host == "https://clob.example.test"  # type: ignore[attr-defined]
+    assert loaded.signature_type == 2  # type: ignore[attr-defined]
+    assert loaded.chain_id == 137  # type: ignore[attr-defined]
+    assert loaded.funder_address == "0x0000000000000000000000000000000000000001"  # type: ignore[attr-defined]
+    assert book.orders == [
+        {"token_id": "token-fill", "price": pytest.approx(0.4), "size": pytest.approx(62.5), "side": "BUY"}
+    ]
+    assert book.posted == [{"signed": True, "order": book.orders[0]}]
+    assert all(not url.endswith("/order") for url in http.posts)
+    assert db.cash_usd() == pytest.approx(1000)
+    assert db.position_rows() == []
+    assert "live orders" in summary
+    assert "filled sent: 1" in summary
+    db.close()
