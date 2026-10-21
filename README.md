@@ -2,7 +2,7 @@
 
 This bot trades only daily temperature markets. The decision path is arithmetic: the fraction of ensemble members, a sigma that widens with lead time, then the book price. There is no LLM and no machine-learning model.
 
-The default mode is paper. The process does not hold a private key and does not send live orders. Telegram sends one scan digest and, when a market resolves, one settlement digest of win and loss.
+The default mode is paper. Wallet and Telegram settings stay in local env files. This bot does not place live orders. Telegram sends one digest of filled and unfilled orders, then a second digest only when a position settles as a win or loss.
 
 ## Flow
 
@@ -40,6 +40,30 @@ git pull
 
 The default database is `data/weatherbot.sqlite`. That file is not committed.
 
+## Local settings
+
+Copy each example and fill it in on your own machine. Do not commit `config/wallet.env` or `config/telegram.env`. Do not paste a key or token into chat. `config/paper.yaml` still rejects a private key, an API secret, a passphrase, or a Telegram token. Paper mode stays the default. There is no live-order command.
+
+### Wallet
+
+```bash
+cp config/wallet.env.example config/wallet.env
+```
+
+`POLYMARKET_PRIVATE_KEY` is the signer key exported from your own Polymarket wallet. `POLYMARKET_FUNDER_ADDRESS` is the address that holds the funds. `POLYMARKET_SIGNATURE_TYPE` is 0 for an externally owned account, 1 for a Polymarket proxy, and 2 for a Gnosis Safe. The example leaves the key and the funder address empty. It sets the signature type to 2, the chain id to 137, and the CLOB host to `https://clob.polymarket.com`.
+
+Filling in this file does not place an order.
+
+### Telegram
+
+```bash
+cp config/telegram.env.example config/telegram.env
+```
+
+`TELEGRAM_BOT_TOKEN` comes from @BotFather. `TELEGRAM_CHAT_ID` is the destination chat: open the bot, send `/start`, then read `chat.id` from `https://api.telegram.org/bot<TOKEN>/getUpdates`.
+
+A scan sends one digest of filled and unfilled orders, then a second digest only when a position settles as a win or loss. A scan with no new order and no settlement sends nothing. Telegram does not choose orders and does not hold a wallet key.
+
 ## Timer
 
 `./deploy/install.sh` creates the virtualenv and installs a systemd timer, `polymarket-weather-bot.timer`, that runs `weatherbot scan` every 30 minutes as the current user. The service writes only under `data/`. The unit files in this repository use `@INSTALL_DIR@` and `@SERVICE_USER@`. The install script fills those in from this clone. It does not embed a home directory.
@@ -53,19 +77,7 @@ journalctl -u polymarket-weather-bot.service -n 50
 .venv/bin/weatherbot portfolio
 ```
 
-## Telegram
-
-Order notices are read from a local file, not from `config/paper.yaml`. The token is not committed. `config/telegram.env` is gitignored; copy the example and fill it in on your machine.
-
-```bash
-cp config/telegram.env.example config/telegram.env
-```
-
-Put `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `config/telegram.env`. Get the token from @BotFather. For the chat id, open the bot, send `/start`, then open `https://api.telegram.org/bot<TOKEN>/getUpdates` and copy `chat.id`.
-
-A scan that places orders sends one digest at the end, not one message per order. The digest counts filled and unfilled orders. A resolved market adds one settlement digest of win and loss, and the result is stored in SQLite. A scan with no new order and no settlement sends nothing. Telegram does not choose orders and does not hold a wallet key.
-
 ## Left out on purpose
 
-- Wallet keys, live orders, and signatures.
+- Live orders and signatures. There is no live-order command.
 - City-bias updates. That waits on settlement, and the model does not read the bias table yet.

@@ -119,6 +119,6 @@ def test_scan_without_orders_sends_nothing():
 
 def test_example_file_has_no_token_and_real_file_is_ignored():
     example = Path("config/telegram.env.example").read_text(encoding="utf-8")
-    assert "TELEGRAM_BOT_TOKEN=" in example
+    assert example == "TELEGRAM_BOT_TOKEN=\nTELEGRAM_CHAT_ID=\n"
     assert "123456:" not in example
     assert "config/telegram.env" in Path(".gitignore").read_text(encoding="utf-8")

@@ -31,8 +31,12 @@ def test_units_stay_on_paper_scan_without_a_private_home():
 
 def test_published_tree_leaves_out_secrets_and_the_private_home():
     assert not (ROOT / "config" / "telegram.env").exists()
+    assert not (ROOT / "config" / "wallet.env").exists()
     assert not list(ROOT.rglob("*.sqlite"))
     assert not list(ROOT.rglob("*.sqlite3"))
+    cli = (ROOT / "src" / "weatherbot" / "cli.py").read_text(encoding="utf-8")
+    assert '("scan", "collect", "status", "portfolio")' in cli
+    assert "live" not in cli.lower()
     for path in ROOT.rglob("*"):
         if not path.is_file():
             continue
@@ -40,7 +44,8 @@ def test_published_tree_leaves_out_secrets_and_the_private_home():
             continue
         text = path.read_text(encoding="utf-8")
         assert PRIVATE_HOME not in text, path
-        assert "telegram.env" not in path.name or path.name.endswith(".example")
+        for secret_name in ("telegram.env", "wallet.env"):
+            assert secret_name not in path.name or path.name.endswith(".example")
 
 
 def test_install_requires_python_311(tmp_path: Path):

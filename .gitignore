@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 data/
 config/telegram.env
+config/wallet.env
 *.sqlite
 *.sqlite3
 *.egg-info/

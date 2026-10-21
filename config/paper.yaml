@@ -1,6 +1,6 @@
 # Paper capital matches the live capital you plan to use.
 # Order size uses min(quarter Kelly, max_order_usd, 5% of capital).
-# Do not put a private key, an API secret, or a Telegram token in this file.
+# Do not put a private key, an API secret, a passphrase, or a Telegram token in this file.
 capital_usd: 1000
 max_order_usd: 25
 min_order_usd: 1
